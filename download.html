@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Download Results</title>
+  <style>
+    * { box-sizing: border-box; margin:0; padding:0 }
+    body, html {
+      height: 100%;
+      font-family: sans-serif;
+    }
+    .wrapper {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      flex-direction: column;
+    }
+    #downloadBtn {
+      padding: 12px 24px;
+      border: 1px solid #444;
+      background: white;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    #downloadBtn:hover {
+      background: #f0f0f0;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <button id="downloadBtn">Download</button>
+  </div>
+
+  <script>
+    document.getElementById('downloadBtn').addEventListener('click', () => {
+      // simulate a file download; replace with your real file URL if you have one
+      const content = 'This is your generated report.';
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'trilogy-report.txt';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // then return to home
+      window.location.href = 'index.html';
+    });
+  </script>
+</body>
+</html>

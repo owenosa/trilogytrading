@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Trilogy Trades Upload</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: sans-serif;
+      padding: 40px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      position: relative;
+      background: #fafafa;
+    }
+    h1 {
+      color: #215a63;
+      margin-bottom: 24px;
+      font-size: 1.5rem;
+    }
+    .zones {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+      max-width: 600px;
+    }
+    .upload-zone {
+      border: 2px dashed #888;
+      padding: 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+      background: white;
+    }
+    .upload-zone.hover {
+      background: #f0faff;
+      border-color: #1890ff;
+    }
+    .upload-zone.filled {
+      border-style: solid;
+      border-color: #1890ff;
+      background: #e6f7ff;
+    }
+    .upload-zone input {
+      display: none;
+    }
+    .upload-zone p {
+      pointer-events: none;
+      color: #333;
+    }
+    button#submitBtn {
+      margin-top: 24px;
+      padding: 10px 20px;
+      border: 1px solid #444;
+      background: #fff;
+      color: #aaa;
+      cursor: not-allowed;
+      transition: background 0.2s, color 0.2s;
+    }
+    button#submitBtn.enabled {
+      background: #1890ff;
+      color: #fff;
+      border-color: #1890ff;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Trilogy Trades</h1>
+  <div class="zones"></div>
+  <button id="submitBtn">Submit</button>
+
+  <script>
+    // 1) Your zone labels + expected file types
+    const labels = [
+      'LPL Alerts',
+      'Schwab Alerts',
+      'Eclipse Accounts',
+      'Eclipse Contributions',
+      'Orion Query 30842',
+      'Practifi PSC Requests',
+      'Practifi Cash Requests'
+    ];
+
+    const zonesContainer = document.querySelector('.zones');
+    const submitBtn = document.getElementById('submitBtn');
+
+    // track which zones have valid files
+    const filled = Array(labels.length).fill(false);
+    const fileInputs = [];
+
+    // 2) Build each drag-and-drop / click-to-upload zone
+    labels.forEach((label, idx) => {
+      const zone = document.createElement('div');
+      zone.className = 'upload-zone';
+      zone.innerHTML = `
+        <input type="file" accept=".csv,.xls,.xlsx" />
+        <p>${label}<br><small>Drag & drop or click to upload</small></p>
+      `;
+      zonesContainer.append(zone);
+
+      const input = zone.querySelector('input');
+      const text  = zone.querySelector('p');
+      fileInputs.push(input);
+
+      // open file picker on click
+      zone.addEventListener('click', () => input.click());
+
+      // drag styling
+      ['dragenter','dragover'].forEach(ev =>
+        zone.addEventListener(ev, e => {
+          e.preventDefault();
+          zone.classList.add('hover');
+        })
+      );
+      ['dragleave','drop'].forEach(ev =>
+        zone.addEventListener(ev, e => {
+          e.preventDefault();
+          zone.classList.remove('hover');
+        })
+      );
+
+      // handle drop
+      zone.addEventListener('drop', e => {
+        if (!e.dataTransfer.files.length) return;
+        input.files = e.dataTransfer.files;
+        handleFile(idx);
+      });
+
+      // handle picker
+      input.addEventListener('change', () => handleFile(idx));
+
+      function handleFile(i) {
+        const file = input.files[0];
+        if (!file) return;
+        const ext = file.name.split('.').pop().toLowerCase();
+        if (!['csv','xls','xlsx'].includes(ext)) {
+          alert('Invalid file type. Please upload CSV or Excel.');
+          input.value = '';
+          return;
+        }
+        // mark filled
+        filled[i] = true;
+        zone.classList.add('filled');
+        text.innerHTML = `<strong>${label}</strong><br><small>${file.name}</small>`;
+        checkAllFilled();
+      }
+    });
+
+    // 3) Enable submit once all zones are filled
+    function checkAllFilled() {
+      if (filled.every(Boolean)) {
+        submitBtn.classList.add('enabled');
+        submitBtn.disabled = false;
+      }
+    }
+
+    // 4) Submit handler: POST to /process, handle JSON errors or zip download
+    submitBtn.addEventListener('click', async () => {
+      if (!filled.every(Boolean)) return;
+
+      submitBtn.textContent = 'Processing…';
+      submitBtn.disabled = true;
+
+      const fd = new FormData();
+      labels.forEach((label, i) => {
+        fd.append(label, fileInputs[i].files[0]);
+      });
+
+      try {
+        const res = await fetch('/process', { method: 'POST', body: fd });
+        const ct  = res.headers.get('Content-Type') || '';
+
+        if (ct.includes('application/json')) {
+          const { error } = await res.json();
+          alert(`Error: ${error}`);
+        }
+        else if (ct.includes('application/zip')) {
+          // trigger zip download
+          const blob = await res.blob();
+          const url  = URL.createObjectURL(blob);
+          const a    = document.createElement('a');
+          a.href     = url;
+          a.download = 'results.zip';
+          document.body.append(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+
+          // reset form
+          window.location.reload();
+        }
+        else {
+          alert('Unexpected server response.');
+        }
+      }
+      catch (err) {
+        console.error(err);
+        alert('Network error – could not reach server.');
+      }
+      finally {
+        submitBtn.textContent = 'Submit';
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
