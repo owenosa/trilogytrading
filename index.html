@@ -12,7 +12,6 @@
       flex-direction: column;
       align-items: center;
       min-height: 100vh;
-      position: relative;
       background: #fafafa;
     }
     h1 {
@@ -44,13 +43,8 @@
       border-color: #1890ff;
       background: #e6f7ff;
     }
-    .upload-zone input {
-      display: none;
-    }
-    .upload-zone p {
-      pointer-events: none;
-      color: #333;
-    }
+    .upload-zone input { display: none; }
+    .upload-zone p { pointer-events: none; color: #333; }
     button#submitBtn {
       margin-top: 24px;
       padding: 10px 20px;
@@ -75,7 +69,6 @@
   <button id="submitBtn">Submit</button>
 
   <script>
-    // 1) Your zone labels + expected file types
     const labels = [
       'LPL Alerts',
       'Schwab Alerts',
@@ -85,15 +78,12 @@
       'Practifi PSC Requests',
       'Practifi Cash Requests'
     ];
-
     const zonesContainer = document.querySelector('.zones');
-    const submitBtn = document.getElementById('submitBtn');
+    const submitBtn      = document.getElementById('submitBtn');
+    const filled         = Array(labels.length).fill(false);
+    const fileInputs     = [];
 
-    // track which zones have valid files
-    const filled = Array(labels.length).fill(false);
-    const fileInputs = [];
-
-    // 2) Build each drag-and-drop / click-to-upload zone
+    // Build upload zones
     labels.forEach((label, idx) => {
       const zone = document.createElement('div');
       zone.className = 'upload-zone';
@@ -107,31 +97,18 @@
       const text  = zone.querySelector('p');
       fileInputs.push(input);
 
-      // open file picker on click
       zone.addEventListener('click', () => input.click());
-
-      // drag styling
-      ['dragenter','dragover'].forEach(ev =>
-        zone.addEventListener(ev, e => {
-          e.preventDefault();
-          zone.classList.add('hover');
-        })
-      );
-      ['dragleave','drop'].forEach(ev =>
-        zone.addEventListener(ev, e => {
-          e.preventDefault();
-          zone.classList.remove('hover');
-        })
-      );
-
-      // handle drop
-      zone.addEventListener('drop', e => {
-        if (!e.dataTransfer.files.length) return;
-        input.files = e.dataTransfer.files;
+      ['dragenter','dragover'].forEach(e => zone.addEventListener(e, ev => {
+        ev.preventDefault(); zone.classList.add('hover');
+      }));
+      ['dragleave','drop'].forEach(e => zone.addEventListener(e, ev => {
+        ev.preventDefault(); zone.classList.remove('hover');
+      }));
+      zone.addEventListener('drop', ev => {
+        if (!ev.dataTransfer.files.length) return;
+        input.files = ev.dataTransfer.files;
         handleFile(idx);
       });
-
-      // handle picker
       input.addEventListener('change', () => handleFile(idx));
 
       function handleFile(i) {
@@ -143,44 +120,36 @@
           input.value = '';
           return;
         }
-        // mark filled
         filled[i] = true;
         zone.classList.add('filled');
         text.innerHTML = `<strong>${label}</strong><br><small>${file.name}</small>`;
-        checkAllFilled();
+        if (filled.every(Boolean)) {
+          submitBtn.classList.add('enabled');
+          submitBtn.disabled = false;
+        }
       }
     });
 
-    // 3) Enable submit once all zones are filled
-    function checkAllFilled() {
-      if (filled.every(Boolean)) {
-        submitBtn.classList.add('enabled');
-        submitBtn.disabled = false;
-      }
-    }
-
-    // 4) Submit handler: POST to /process, handle JSON errors or zip download
     submitBtn.addEventListener('click', async () => {
       if (!filled.every(Boolean)) return;
-
       submitBtn.textContent = 'Processing…';
-      submitBtn.disabled = true;
+      submitBtn.disabled   = true;
 
       const fd = new FormData();
-      labels.forEach((label, i) => {
+      labels.forEach((label,i) => {
         fd.append(label, fileInputs[i].files[0]);
       });
 
       try {
-        const res = await fetch('/process', { method: 'POST', body: fd });
-        const ct  = res.headers.get('Content-Type') || '';
-
+        const res = await fetch('https://owenosa.pythonanywhere.com/process', {
+          method: 'POST', body: fd
+        });
+        const ct = res.headers.get('Content-Type')||'';
         if (ct.includes('application/json')) {
-          const { error } = await res.json();
+          const {error} = await res.json();
           alert(`Error: ${error}`);
         }
         else if (ct.includes('application/zip')) {
-          // trigger zip download
           const blob = await res.blob();
           const url  = URL.createObjectURL(blob);
           const a    = document.createElement('a');
@@ -190,9 +159,8 @@
           a.click();
           a.remove();
           URL.revokeObjectURL(url);
-
-          // reset form
-          window.location.reload();
+          // back to GH-Pages home
+          window.location.href = 'https://owenosa.github.io/trilogytrading/index.html';
         }
         else {
           alert('Unexpected server response.');
@@ -204,7 +172,7 @@
       }
       finally {
         submitBtn.textContent = 'Submit';
-        submitBtn.disabled = false;
+        submitBtn.disabled   = false;
       }
     });
   </script>
